@@ -94,7 +94,7 @@ dates <- seq(as.Date("2019-01-01"), as.Date("2023-06-30"), by = "month")
 # Create dummy data for query_df
 query_df <- data.frame(
   sku = rep(1:10, length(dates)),
-  brand = sample(c("Brand A", "Other Brand"), length(datees)*10, replace = TRUE),
+  brand = sample(c("Brand A", "Other Brand"), length(dates)*10, replace = TRUE),
   brand_family = sample(c("Brand A Family", "Other Family"), length(dates)*10, replace = TRUE),
   date = rep(dates, 10),
   case_volume = sample(50:500, length(dates)*10, replace = TRUE),
