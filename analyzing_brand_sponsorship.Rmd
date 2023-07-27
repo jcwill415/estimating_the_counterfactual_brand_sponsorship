@@ -1,0 +1,1047 @@
+---
+title: "Analyzing Brand Sponsorship Impact on Sales"
+author: 
+date: 
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    includes:
+      in_header: header.html
+---
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.height = 4, fig.width = 10)
+```
+
+# Overview
+For the past several years, Brand A has sponsored Event X. There are several possible benefits from this investment:
+
+* An immediate boost in sales around the time of Event X
+* A long-term boost in sales due to increased growth over time
+* Preventing other brands from becoming the official sponsor
+* An increase in name brand recognition and brand equity (potentially translating into long-term growth)
+
+While long-term growth is the most important outcome, it is also the hardest to quantify because when we are looking at yearly volume growth Event X is only one of many drivers of growth. This analysis focuses on what we can quantify, which is the short-term return on Brand A's sponsorship of Event X.
+
+The estimates provided are the size of sales increase around Event X, in which we show that it is reasonable to assume increase is caused by marketing activity during that time period. Currently, we are not able to distinguish among the various forms of promotion that occur. As such, we are not able to determine what are the relative impacts of advertising around Event X v. direct sponsorship. However, we can estimate the short-term sales impact of Event X activity as a whole by isolating Event X **incremental volume**. We will further explain the methodology next.
+
+
+# Method
+## Estimating The Counterfactual
+First, we will isolate Event X incremental volume. We know how many cases of Brand A were sold during Event X for the last three years (using takeaway data from Nielsen and NABCA). The main goal of the analysis is to produce a quality estimate of how many cases we would have sold if we had not sponsored Event X. The difference between how many cases we actually sold and how many cases we would have sold if we had not sponsored Event X is the best way to quantify the impact of Event X on short-term sales.
+
+Second, we check that factors such as price and distribution are not impacting the sales during Event X. After this, we calculate an **ROI range** with high- and low-end assumptions. This will be further explained in the section **“Figuring out the ROI.”**
+
+Finally, in addition to volume and financial data, we also explore **Google Trends** data to show how search interest is trending over time for Brand A vs competitor brands (Brand B, Brand C, and Brand D). In addition to the Google Trends section in this report, we have built a **Tableau Dashboard** to further explore and visualize Google search interest by brands and channels, or search types (Web, Image, News, Google Shopping, and YouTube). View the [Google Trends dashboard here](link).
+
+## Brand A Compared to other Brands in the Same Category
+We start by visualizing the sales trends of Brand A compared to the rest of the Category. To cleanly compare and graph these trends, we use an index. This takes the average weekly case volume during times when sales aren’t influenced by Event X (by excluding April and May) or the holiday season (October through December) as the base for the index.
+
+Looking at Nielsen data over the past 3 years, we show that the Brand A family of brands experienced a substantial increase in sales during Event X each year. The 2020 Event X had the smallest volume increase, as expected due to it being postponed due to COVID and having a smaller audience that year.
+
+```{r set up}
+library(tidyverse)
+library(gtrendsR)
+library(odbc)
+library(ggthemes)
+library(gt)
+library(kableExtra)
+conn <- dbConnect(odbc::odbc(), "CLPImpala")
+
+# Set theme for ggplot
+theme_event <-
+  function (base_size = 14,
+            base_family = "sans",
+            ticks = TRUE) {
+    ret <- theme_bw(base_family = base_family, base_size = base_size) +
+      theme(
+        legend.position = "top",
+        legend.background = element_blank(),
+        legend.key = element_blank(),
+        legend.title = element_blank(), # remove legend titles
+        panel.background = element_blank(),
+        panel.border = element_blank(),
+        strip.background = element_blank(),
+        #plot.background = element_blank(),
+        plot.background = element_rect(fill = 'white'),
+        plot.title = element_text(hjust = 0.5),
+        #center titles
+        plot.subtitle = element_text(hjust = 0.5),
+        #center subtitles
+        axis.line = element_blank(),
+        panel.grid = element_blank()
+      )
+    if (!ticks) {
+      ret <- ret + theme(axis.ticks = element_blank())
+    }
+    ret
+  }
+```
+
+# Generate Dummy Data
+
+In this example, we have created dummy data for the query_df and nabca_query_df dataframes used in the R script. The data includes columns such as sku, brand, brand_family, date, case_volume, value, acv, display_acv, feature_acv, feature_display_acv, category, price_segment, and state. We generated random values for the numeric columns to simulate real-world data.
+
+```{r, eval = F}
+# Generate dummy data for query_df
+set.seed(42) # Set seed for reproducibility
+
+# Generate dates from January 2019 to June 2023
+dates <- seq(as.Date("2019-01-01"), as.Date("2023-06-30"), by = "month")
+
+# Create dummy data for query_df
+query_df <- data.frame(
+  sku = rep(1:10, length(dates)),
+  brand = sample(c("Brand A", "Other Brand"), length(datees)*10, replace = TRUE),
+  brand_family = sample(c("Brand A Family", "Other Family"), length(dates)*10, replace = TRUE),
+  date = rep(dates, 10),
+  case_volume = sample(50:500, length(dates)*10, replace = TRUE),
+  value = sample(2000:10000, length(dates)*10, replace = TRUE),
+  acv = sample(1000:8000, length(dates)*10, replace = TRUE),
+  display_acv = sample(500:3000, length(dates)*10, replace = TRUE),
+  feature_acv = sample(300:1500, length(dates)*10, replace = TRUE),
+  feature_display_acv = sample(200:1000, length(dates)*10, replace = TRUE),
+  category = rep("CATEGORY 1", length(dates)*10),
+  price_segment = rep(c("$20-$29.99", "$30-$39.99"), each = length(dates)*5),
+  state = rep("US", length(dates)*10)
+)
+
+# Generate dummy data for nabca_query_df
+# For simplicity, we use a subset of the data from query_df
+nabca_query_df <- query_df %>%
+  sample_n(100) %>%
+  mutate(
+    case_volume = case_volume * 0.8, # Decrease case_volume for example
+    value = value * 0.8, # Decrease value for example
+    acv = acv * 0.8, # Decrease acv for example
+    display_acv = display_acv * 0.8, # Decrease display_acv for example
+    feature_acv = feature_acv * 0.8, # Decrease feature_acv for example
+    feature_display_acv = feature_display_acv * 0.8 # Decrease feature_display_acv for example
+  ) %>%
+  mutate(country = "US-NABCA", report_type = "As Reported", category = "CATEGORY 2")
+
+```
+
+```{r save local copies for speed, eval = F}
+write_csv(query_df, "query_df.csv")
+write_csv(nabca_query_df, "nabca_query_df.csv")
+```
+
+```{r load local copies, eval = T}
+query_df <- read_csv("query_df.csv")
+nabca_query_df <- read_csv("nabca_query_df.csv")
+```
+
+```{r}
+# A function for wrangling data from either Nielsen or NABCA
+wrangle_the_data <- function(df, brands = FALSE, state = "none") {
+  
+  if(brands == FALSE) {
+    output_df <- df %>%
+      mutate(
+        `Brand Family` = case_when(
+          brand_family == "BRAND A" ~ "BRAND A",
+          TRUE ~ "OTHER $20-$40 PRODUCT"
+        )
+      )
+  }
+  
+  if (brands == TRUE) {
+    output_df <- df %>%
+      mutate(
+        `Brand Family` = case_when(
+          brand_family == "BRAND A" ~ "BRAND A",
+          brand_family == "BRAND B" ~ "BRAND B",
+          brand_family == "BRAND C" ~ "BRAND C",
+          brand_family == "BRAND D" ~ "BRAND D",
+          TRUE ~ "OTHER"
+        )
+      ) %>%
+      filter(`Brand Family` != "OTHER")
+  }
+  
+  if (state == "none") {
+    output_df <- output_df %>%
+      group_by(`Brand Family`, date) %>%
+      summarize(case_volume = sum(case_volume, na.rm = TRUE)) %>%
+    ungroup() %>%
+    group_by(`Brand Family`) %>%
+    mutate(
+      month = lubridate::month(date),
+      year = lubridate::year(date),
+      Event = case_when(
+        month %in% c(4, 5) & year %in% c(2021, 2022, 2023) ~ "Event X",
+        month %in% c(8, 9) & year == 2020 ~ "Event X",
+        month %in% c(10, 11, 12) ~ "Holiday",
+        TRUE ~ "Normal"
+      )
+    ) %>%
+    group_by(`Brand Family`, year) %>%
+    mutate(
+      starting_case_volume = mean(case_volume[Event == "Normal"]),
+      index = case_volume / starting_case_volume
+    ) %>%
+    ungroup()
+  }
+  
+  if (state == "all") {
+    output_df <- output_df %>%
+      group_by(`Brand Family`, date, state) %>%
+      summarize(case_volume = sum(case_volume, na.rm = TRUE)) %>%
+    ungroup() %>%
+    group_by(`Brand Family`) %>%
+    mutate(
+      month = lubridate::month(date),
+      year = lubridate::year(date),
+      Event = case_when(
+        month %in% c(4, 5) & year %in% c(2021, 2022, 2023) ~ "Event X",
+        month %in% c(8, 9) & year == 2020 ~ "Event X",
+        month %in% c(10, 11, 12) ~ "Holiday",
+        TRUE ~ "Normal"
+      )
+    ) %>%
+    group_by(`Brand Family`, year, state) %>%
+    mutate(
+      starting_case_volume = mean(case_volume[Event == "Normal"]),
+      index = case_volume / starting_case_volume
+    ) %>%
+    ungroup()
+  }
+  
+  if (state == "california") {
+    output_df <- output_df %>%
+      mutate(kentucky = if_else(state == "California", 1, 0)) %>%
+      group_by(`Brand Family`, date, kentucky) %>%
+      summarize(case_volume = sum(case_volume, na.rm = TRUE)) %>%
+    ungroup() %>%
+    group_by(`Brand Family`) %>%
+    mutate(
+      month = lubridate::month(date),
+      year = lubridate::year(date),
+      Event = case_when(
+        month %in% c(4, 5) & year %in% c(2021, 2022, 2023) ~ "Event X",
+        month %in% c(8, 9) & year == 2020 ~ "Event X",
+        month %in% c(10, 11, 12) ~ "Holiday",
+        TRUE ~ "Normal"
+      )
+    ) %>%
+    group_by(`Brand Family`, year, california) %>%
+    mutate(
+      starting_case_volume = mean(case_volume[Event == "Normal"]),
+      index = case_volume / starting_case_volume
+    ) %>%
+    ungroup()
+  }
+  
+return(output_df)
+    
+}
+
+plot_the_data <- function(df, rects, title_text) {
+  plt_vol <-
+    ggplot(df, aes(x = date, y = index, colour = `Brand Family`)) +
+    geom_point() +
+    geom_line() +
+    geom_rect(
+      data = rects,
+      inherit.aes = FALSE,
+      aes(
+        xmin = start,
+        xmax = end,
+        ymin = min(df$index),
+        ymax = max(df$index),
+        group = group
+      ),
+      color = "transparent",
+      fill = "slategray2",
+      alpha = 0.3
+    ) +
+    labs(
+      title = title_text,
+      y = "Indexed Case Volume",
+      x = "Date",
+      caption = "The two months around each Event X are shaded to highlight the impact of the event"
+    ) +
+    theme_event()
+}
+
+# Wrangling Nielsen data
+nielsen_df <- wrangle_the_data(query_df)
+nielsen_df_brand <- wrangle_the_data(query_df, brands = TRUE)
+nabca_df <- wrangle_the_data(nabca_query_df)
+nabca_df_brand <- wrangle_the_data(nabca_query_df, brands = TRUE)
+
+# Rectangles for the past 3 years of Event X
+rects3 <- tibble(
+  start = c("2021-04-01", "2022-04-01","2023-04-01"),
+  end = c("2021-06-01", "2022-06-01","2023-06-01"),
+  group = 1:3
+) %>%
+  mutate(start = as.POSIXct(start),
+         end = as.POSIXct(end))
+
+# Rectangles for the past 5 years of Event X
+rects5 <- tibble(
+  start = c("2019-04-01", "2020-08-01", "2021-04-01", "2022-04-01","2023-04-01"),
+  end = c("2019-06-01", "2020-10-01", "2021-06-01","2022-06-01", "2023-06-01"),
+  group = 1:5
+) %>%
+  mutate(start = as.POSIXct(start),
+         end = as.POSIXct(end))
+
+
+nielsen_plt <- plot_the_data(nielsen_df, rects3, title_text = "Relative Volume of Brand A (Nielsen)")
+nielsen_plt_brands <- plot_the_data(nielsen_df_brand, rects3, title_text = "Relative Volume of Brand A (Nielsen)")
+nabca_plt <- plot_the_data(nabca_df, rects5, title_text = "Relative Volume of Brand A (NABCA)")
+nabca_plt_brands <- plot_the_data(nabca_df_brand, rects5, title_text = "Relative Volume of Brand A (NABCA)")
+
+
+# tiff("branda_volume.tiff", res = 800, units = "in",
+#     width = 10, height = 4)
+# nielsen_plt
+#  dev.off()
+#  
+# tiff("branda_nabca_volume.tiff", res = 800, units = "in",
+#     width = 10, height = 4)
+# nabca_plt
+#  dev.off()
+#  
+nielsen_plt
+```
+
+## Update this section based on dummy data generated.
+Ex: "The results from NABCA suggest we also saw an increase in Brand A sales in the NABCA market."
+
+```{r}
+nabca_plt
+```
+
+```{r branda plot, eval = FALSE}
+df_branda <- query_df %>%
+  filter(brand_family == "BRAND A") %>%
+  group_by(date) %>%
+  summarize(case_volume = sum(case_volume, na.rm = TRUE))
+
+plt <- ggplot(df_wdfd, aes(x = date, y = case_volume)) +
+  geom_point() +
+  geom_line() +
+  theme_bw()
+
+plt
+```
+
+# Update this section based on results of dummy data generated. For example:
+"The index makes it easier to see that Brand A follows the same pattern as other 20\$+ Products in the category, with one exception - during Event X.
+
+Since competitor brands for this category follow the same trend and the Event X period does not feature heavy price discounting or advertising category-wide, it is reasonable to assume that in the absence of Event X actiivity, Brand A would have performed approximately as well as the category did. We also checked to make sure that Brand A did not have any unusual pricing or distribution activity during this time period that would explain its higher sales volume.
+
+While Brand A follows the category very closely, it is experiencing slighly quicker growth year over year. To avoid any influence from the difference in year over year trend growth between Brand A and the Category, the index is specific to each year.
+
+We can quantify the size of the Event X sales increase by estimating how much Brand A would have sold without the Event X sponsorship. A reasonable estimate is that it would have sold as many cases as it did during an average week - the same relative level of performance as the category.
+
+The Event X sales boost is also visible for more than the week of Event X. We include all weeks of April and May, because sales are at least slightly above average during those months.
+
+Based on comparing Brand A to the indexed value of competitors, we can determine a base volume - what we think Brand A would have sold if it had not sponsored Event X. The incremental volume is the difference between Brand A’s actual sales and our estimate of base volume. The lift is the incremental volume expressed as a percentage of the base volume, which makes it easier to compare across years and markets when the base volume differs.
+
+For both Nielsen and NABCA, year XXXX had the highest lift of any year. Across all 3 years we see that Nielsen has a larger increase in from Event X.
+
+
+## Results Table
+
+```{r}
+## Data wrangling to build results table
+
+## Function for building out case volume lifts in both Nielsen and NABCA
+calc_incremental <- function(df) {
+  # grab indexed values and spread to weekly table
+  # will later join with case volume
+  df_index <- df %>%
+    select(date, brand_family, index) %>%
+    spread(key = brand_family, value = index) %>%
+    rename(branda_index = BRAND A, other_index = `OTHER $20-$40 PRODUCT`) %>%
+    ungroup() 
+  
+  #pull out case volumes and starting case volume
+  df_case <- df %>%
+    select(date,
+           brand_family,
+           starting_case_volume,
+           Event,
+           case_volume,
+           year) %>%
+    filter(brand_family == "BRAND A")
+  
+  # join
+  df_joined <-
+    full_join(df_case, df_index, by = "date")
+  
+  #calculate incremental based on a Base value of what Brand A would have sold if they performed at the level of other brands
+  out_df <- df_joined %>%
+    mutate(Base = starting_case_volume * other_index,
+           Incremental  = case_volume - Base) %>%
+    group_by(year, Event) %>%
+    summarize(inc_total = sum(Incremental),
+              base_total = sum(Base)) %>%
+    filter(Event == "Event X") %>%
+    mutate(lift = inc_total/base_total)
+  
+  return(out_df)
+  
+}
+
+## Calculate Nielsen
+niel_df_vol <- wrangle_the_data(query_df) %>%
+  rename(brand_family = `Brand Family`)
+
+nielsen_inc <- calc_incremental(niel_df_vol)
+
+## Calculate NABCA
+nabca_df_vol <- wrangle_the_data(nabca_query_df) %>%
+  rename(brand_family = `Brand Family`)
+
+nabca_inc <- calc_incremental(nabca_df_vol)
+
+## Format into nice gt tables
+nielsen_inc <- nielsen_inc %>%
+  mutate(Data = "Nielsen") 
+  
+nabca_inc <- nabca_inc %>%
+  mutate(Data = "NABCA") 
+  
+tbl_out <- bind_rows(nielsen_inc, nabca_inc) %>%
+  select(-Event) %>%
+  group_by(Data) %>%
+  gt() %>%
+  tab_header(
+    title = "Brand A's Incremental Volume & Lift from Event X Sponsorship",
+  ) %>%
+  cols_label(
+    year = "Year",
+    inc_total = "Incremental",
+    base_total = "Base",
+    lift = "Lift"
+  ) %>%
+  fmt_number(
+    columns = vars(inc_total, base_total),
+    decimals = 0,
+    suffixing = TRUE
+  ) %>%
+  fmt_percent(
+    columns = vars(lift),
+    decimals = 1
+  )
+  
+tbl_out
+```
+
+# Update this section based on results of dummy data generated. For example:
+## Figuring out an ROI range
+
+Using these results, plus some financial data and a few assumptions, we can get to an **ROI range** for each of the past 3 years for Event X. We have lift in Nielsen and NABCA markets, which cover about 50% of total U.S. volume. To get lift in the other markets, we have to make some assumptions:
+
+* Our **high-end assumption** is that the markets without coverage experienced the same percent lift as **Nielsen**.
+* Our **low-end assumption** is that the markets without coverage experienced the same percent lift as **NABCA**.
+
+That gives us a **total case volume**. Combined with **gross profit per case** we get to **incremental profit**, and then divide by the **cost of the investment** to get an ROI range.
+
+Looking at 2023, we estimate that Brand A's short-term ROI from Event X falls between X.XX and X.XX, and the sponsorship raised an additional XX\$-XX\$M this year. While the lift increased from the previous year (XX\$-XX\$M in 2021), our ROI estimates were lower this year. Last year the ROI range fell between X.X and X.X, despite a lower GP per case. This was mainly due to the increased expense, as our investment increased about X.X\$M (from X.X\$M in 2022 to X.X\$M in 2023).
+
+Overall, the lift or increase in sales we are seeing is not attributable to other factors such as price or distribution. Although the 2022 ROI was slightly lower than last year, this gives us an important insight - that pricing remains strong as volume is increasing.
+
+```{r}
+pull_values <- function(year_to_pull, data_to_pull) {
+  if(data_to_pull == "Nielsen"){
+    df <- nielsen_inc
+  }
+  
+  if(data_to_pull == "Nabca") {
+    df <- nabca_inc
+  }
+  
+  df <- df %>%
+    filter(year == year_to_pull)
+  
+  #after filtering there is only 1 row left
+  out_list <- list(
+    base = df$base_total[1],
+    lift_per = df$lift[1],
+    lift_cases = df$inc_total[1]
+  )
+}
+
+
+niel_23 <- pull_values(2023, "Nielsen")
+nabca_23 <- pull_values(2023, "Nabca")
+
+niel_22 <- pull_values(2022, "Nielsen")
+nabca_22 <- pull_values(2022, "Nabca")
+
+niel_21 <- pull_values(2021, "Nielsen")
+nabca_21 <- pull_values(2021, "Nabca")
+
+
+calc_roi <- function(niel_base, nabca_base, lift_per, niel_lift_cases, nabca_lift_cases,
+                     gp_per_case, expense) {
+  uncovered_base <- ((niel_base + nabca_base) * 100 / 50) - (niel_base + nabca_base) #uncovered base cases from nonNielsen_nabca
+  uncovered_lift_cases <- uncovered_base * lift_per #based on how we assume lift for uncovered, will try multiple scenarios, high and low
+  total_lift_cases <- niel_lift_cases + nabca_lift_cases + uncovered_lift_cases 
+  
+  lift_dollars <- total_lift_cases * gp_per_case
+  roi_out <- lift_dollars/expense
+  
+  out_list <- list(lift_cases = total_lift_cases, lift_money = lift_dollars, roi = roi_out)
+  return(out_list)
+}
+
+# 2023
+results_2023_h <- calc_roi(
+  niel_base = niel_23$base,
+  nabca_base = nabca_23$base,
+  lift_per = niel_23$lift_per,
+  niel_lift_cases = niel_23$lift_cases,
+  nabca_lift_cases = nabca_23$lift_cases,
+  gp_per_case = 150.50, 
+  expense = 5500000
+)
+
+# In the low scenario we use NABCA lift applied to the rest of the market
+results_2023_l <- calc_roi(
+  niel_base = niel_23$base,
+  nabca_base = nabca_23$base,
+  lift_per = nabca_23$lift_per,
+  niel_lift_cases = niel_23$lift_cases,
+  nabca_lift_cases = nabca_23$lift_cases,
+  gp_per_case = 150.50, 
+  expense = 5500000
+)
+
+# 2022
+results_2022_h <- calc_roi(
+  niel_base = niel_22$base,
+  nabca_base = nabca_22$base,
+  lift_per = niel_22$lift_per,
+  niel_lift_cases = niel_22$lift_cases,
+  nabca_lift_cases = nabca_22$lift_cases,
+  gp_per_case = 145.25,
+  expense = 4750000
+)
+
+# In the low scenario we use NABCA lift applied to the rest of the market
+results_2022_l <- calc_roi(
+  niel_base = niel_22$base,
+  nabca_base = nabca_22$base,
+  lift_per = nabca_22$lift_per,
+  niel_lift_cases = niel_22$lift_cases,
+  nabca_lift_cases = nabca_22$lift_cases,
+  gp_per_case = 145.25,
+  expense = 4750000
+)
+
+# 2021
+results_2021_h <- calc_roi(
+  niel_base = niel_21$base,
+  nabca_base = nabca_21$base,
+  lift_per = niel_21$lift_per,
+  niel_lift_cases = niel_21$lift_cases,
+  nabca_lift_cases = nabca_21$lift_cases,
+  gp_per_case = 146.00,
+  expense = 4250000
+)
+
+results_2021_l <- calc_roi(
+  niel_base = niel_21$base,
+  nabca_base = nabca_21$base,
+  lift_per = nabca_21$lift_per,
+  niel_lift_cases = niel_21$lift_cases,
+  nabca_lift_cases = nabca_21$lift_cases,
+  gp_per_case = 146.00,
+  expense = 4250000
+)
+
+# Create an output table with:
+# Lift in cases
+# Lift in percent
+# gp
+# expense
+# ROI
+
+out_df <- tibble(
+  Year = c(2023, 2023, 2022, 2022, 2021, 2021),
+  Scenario = c("High", "Low", "High", "Low", "High", "Low"),
+  `Lift (Cases)` = c(
+    results_2023_h$lift_cases,
+    results_2023_l$lift_cases,
+    results_2022_l$lift_cases,
+    results_2022_h$lift_cases,
+    results_2021_h$lift_cases,
+    results_2021_l$lift_cases
+  ),
+  `Lift ($)` = c(
+    results_2023_h$lift_money,
+    results_2023_l$lift_money,
+    results_2022_l$lift_money,
+    results_2022_h$lift_money,
+    results_2021_h$lift_money,
+    results_2021_l$lift_money
+  ),
+  ROI = c(
+    results_2023_h$roi,
+    results_2023_l$roi,
+    results_2022_l$roi,
+    results_2022_h$roi,
+    results_2021_h$roi,
+    results_2021_l$roi
+  ),
+  `GP per Case` = c(150.50, 150.50, 145.25, 145.25, 146.00, 146.00) 
+)
+
+roi_out <- out_df %>%
+  group_by(Year) %>%
+  gt() %>%
+  tab_header(
+    title = "Brand A's Short-term ROI from Event X",
+    subtitle = "Combines Nielsen, NABCA, & Unobserved U.S. Lift"
+  ) %>%
+  fmt_number(
+    columns = vars(`Lift (Cases)`, `Lift ($)`),
+    decimals = 0,
+    suffixing = TRUE
+  ) %>%
+  fmt_number(
+    columns = vars(ROI, `GP per Case`),
+    decimals = 2
+  )
+
+roi_out
+```
+
+## Where do we see an increase in sales for Event X?
+
+```{r read in data}
+query_df <- read_csv("query_df.csv")
+nabca_query_df <- read_csv("nabca_query_df.csv")
+```
+
+```{r state groupings}
+ca_wrangled <- wrangle_the_data(query_df, brands = FALSE, state = "california")
+state_wrangled <- wrangle_the_data(query_df, brands = FALSE, state = "all")
+```
+
+```{r}
+ca_scale <- ca_wrangled %>%
+  filter(`Brand Family` == "BRAND A") %>%
+  group_by(california) %>%
+  summarize(case_volume = sum(case_volume))
+
+in_scale <-in_wrangled %>%
+  filter(`Brand Family` == "BRAND A") %>%
+  group_by(indiana) %>%
+  summarize(case_volume = sum(case_volume))
+```
+
+
+```{r}
+ca_plt <- plot_the_data(ca_wrangled %>% filter(california == 1), rects3, title_text = "Relative Volume of Brand A | California (Nielsen)")
+
+not_ca_plt <- plot_the_data(ca_wrangled %>% filter(california == 0), rects3, title_text = "Relative Volume of Brand A | Outside California (Nielsen)")
+
+```
+
+# Update this section based on the results of the dummy data generated. For example:
+
+For California, Brand A nearly triples their average weekly sales during Event X. In addition, the effect outside of California is also strong, with around X.X times average weekly sales. While it is worth noting that California has a stronger impact, less than 2 percent of Brand A's sales from Nielsen in the last 3 years. In terms of overall ROI and lift, the results with and without California remain functionally the same, because California is not a large enough market to change the conclusions. 
+
+```{r}
+ggsave(filename = "plt_ca",
+         ca_plt,
+         device = "png",
+         width = 10,
+         height = 6)
+
+ggsave(filename = "plt_not_ca",
+         not_ca_plt,
+         device = "png",
+         width = 10,
+         height = 6)
+
+ca_plt
+```
+
+```{r}
+not_ca_plt
+```
+
+```{r}
+state_df <- wrangle_the_data(query_df, brands = FALSE, state = "all")
+
+plot_the_state_data <- function(df, rects, state_input) {
+  
+  df <- df %>%
+    filter(state == state_input)
+  
+  plt_vol <-
+    ggplot(df, aes(x = date, y = index, colour = `Brand Family`)) +
+    geom_point() +
+    geom_line() +
+    geom_rect(
+      data = rects,
+      inherit.aes = FALSE,
+      aes(
+        xmin = start,
+        xmax = end,
+        ymin = min(df$index),
+        ymax = max(df$index),
+        group = group
+      ),
+      color = "transparent",
+      fill = "slategray2",
+      alpha = 0.3
+    ) +
+    labs(
+      title = paste("Relative Volume of Brand A |", state_input, "(Nielsen)", sep = " "),
+      y = "Indexed Case Volume",
+      x = "Date",
+      caption = "The two months around each Event X are shaded to highlight the impact of the event."
+    ) +
+    #theme_classic()
+    theme_event()
+    
+  ggsave(filename = paste0("plt_", state_input),
+         plt_vol,
+         device = "png",
+         width = 9,
+         height = 6)
+}
+
+plot_the_state_data(state_df, rects = rects3, state_input = "California")
+
+state_list <- query_df$state %>% unique()
+purrr::walk(state_list, plot_the_state_data, df = state_df, rects = rects3)
+```
+
+# This section can be updated using sample Google Trends data, or just comment out.
+
+## Additional Evidence
+
+### Google Trends Data
+
+Google trends data shows Brand A receiving an increase in search interest during the week of Event X. We compare both to normal weeks (grey dots) and other events (Event Y and Event Z). While Brand A did get a boost from Event X this year, it does not match the level we saw in 2019 or the level of search interest seen for New Year’s in 2020 and 2021.
+
+```{r, eval = T}
+
+library(ggimage)
+library(png)
+
+# Start with just Brand A trends data
+
+# # Function to handle 429 errors for Google Trends
+# handle_429 <- function(expr, retries = 3, wait_time = 5) {
+#   for (i in 1:retries) {
+#     try_result <-tryCatch(expr, error = function(e) e)
+#     if(!inherits(try_result, "error")) {
+#       return(try_result)
+#     } else if (grep1("429 Too Many Requests", try_result$message)) {
+#       cat("Rate limit exceeded. Waiting for", wait_time, "seconds and then retrying...\n")
+#       Sys.sleep(wait_time)
+#     } else {
+#       stop(try_result)
+#     }
+#   }
+#   stop("Reached maximum number of retries. Exiting...")
+# }
+# 
+# get_gtrends_data <- function(keyword, geo, category, time) {
+#   handle_429({
+#     trend_branda <- gtrends(keyword = "brand a",
+#                         geo = "US",
+#                         category = "XXX", # Product Category 
+#                         time = "today+5-y")
+#     return(trend_branda)
+#   })
+# }
+#  
+# 
+# branda_time <- trend_branda$interest_over_time
+# 
+# branda_time <- branda_time %>%
+#   ungroup() %>%
+#   mutate(month = lubridate::month(date),
+#          year = lubridate::year(date),
+#          event_time = case_when(
+#            month %in% c(4, 5) & year %in% c(2019, 2021, 2022, 2023) ~ "event x",
+#            month %in% c(8, 9) & year == 2020 ~ "event x",
+#            month == 12 ~ "holiday",
+#            TRUE ~ "normal")
+#          ) %>%
+#   group_by(event_time, year) %>%
+#   mutate(max_hits = case_when(
+#            hits == max(hits) ~ 1,
+#            TRUE ~ 0),
+#          Event = case_when(
+#            event_time == "event x" & max_hits == 1 ~ "Event X",
+#            event_time == "holiday" & max_hits == 1 ~ "Holiday",
+#            TRUE ~ "Normal"
+#   ))
+# 
+# df_plt <- branda_time %>%
+#   mutate(highlight = case_when(
+#     event_time == "event x" ~ 1,
+#     TRUE ~ 0)
+#   )
+# 
+# rects5 <- tibble(
+#   start = c("2019-04-01", "2020-08-01", "2021-04-01", "2022-04-01", "2023-04-01"),
+#   end = c("2019-06-01", "2020-10-01", "2021-06-01", "2022-06-01", "2023-06-01"),
+#   group = 1:5
+# ) %>%
+#   mutate(start = as.POSIXct(start),
+#          end = as.POSIXct(end))
+# 
+# df_plt_image1 <- df_plt %>%
+#   mutate(date_char = as.character(date)) %>%
+#   filter(
+#     Event == "Event X" |
+#       date_char %in% c(
+#         "2019-02-03",
+#         "2020-02-02",
+#         "2021-02-07",
+#         "2022-02-13",
+#         "2023-02-12",
+#         "2019-02-17",
+#         "2020-02-16",
+#         "2021-02-14",
+#         "2022-02-20",
+#         "2023-02-19"
+#       )
+#   )
+# 
+# df_plt_image1 <- df_plt_image1 %>%
+#   mutate(
+#     image = case_when(
+#       Event == "Event X" ~ "image1.png",
+#       date_char %in% c(
+#         "2019-02-03",
+#         "2020-02-02",
+#         "2021-02-07",
+#         "2022-02-13",
+#         "2023-02-12"
+#       ) ~ "image2.png",
+#       date_char %in% c(
+#         "2019-02-17",
+#         "2020-02-16",
+#         "2021-02-14",
+#         "2022-02-20",
+#         "2023-02-19"
+#       ) ~ "image3.png",
+#       TRUE ~ " "
+#     )
+#   )
+# 
+# 
+# plt <- ggplot(data = df_plt, aes(x = date, y = hits)) +
+#   geom_rect(
+#     data = rects5,
+#     inherit.aes = FALSE,
+#     aes(
+#       xmin = start,
+#       xmax = end,
+#       ymin = min(df_plt$hits),
+#       ymax = max(df_plt$hits),
+#       group = group
+#     ),
+#     color = "transparent",
+#     fill = "slategray2",
+#     alpha = 0.3
+#   ) +
+#   geom_point(color = "grey") +
+#   geom_image(data = df_plt_image1, aes(image = image)) +
+#   labs(
+#     title = "Brand A Search Volume by Event",
+#     subtitle = "Event X, Event Y, and Event Z",
+#     x = "Week",
+#     y = "Search Volume (Indexed to 100)",
+#     caption = "April and May are shaded to highlight the impact of Event X"
+#   ) +
+#   theme_event()
+# 
+# # tiff("branda_search.tiff", res = 800, units = "in",
+# #      width = 7, height = 4)
+# plt
+# # dev.off()
+# ```
+# # Update this section based on a sample Google Trends search:
+# ### Brand A Trends Compared to Competitors 
+# 
+# Comparing Brand A to competitors we can see that the Event X spike in Brand A searches is unique to Brand A and not shared by other brands.
+# ```{r, eval = T}
+# 
+# # Function to handle 429 errors for Google Trends
+# handle_429 <- function(expr, retries = 3, wait_time = 5) {
+#   for (i in 1:retries) {
+#     try_result <-tryCatch(expr, error = function(e) e)
+#     if(!inherits(try_result, "error")) {
+#       return(try_result)
+#     } else if (grep1("429 Too Many Requests", try_result$message)) {
+#       cat("Rate limit exceeded. Waiting for", wait_time, "seconds and then retrying...\n")
+#       Sys.sleep(wait_time)
+#     } else {
+#       stop(try_result)
+#     }
+#   }
+#   stop("Reached maximum number of retries. Exiting...")
+# }
+# 
+# get_gtrends_data <- function(keyword, geo, category, time) {
+#   handle_429({
+#     trend_data <- gtrends(keyword = keyword,
+#                           geo = geo,
+#                           category = category,
+#                           time = time)
+#     return(trend_Data)
+#   })
+# }
+# 
+# # Call the function to get data and assign to trend_branda
+#     trend_branda <- gtrends(keyword = c("branda", "brandb"),
+#                         geo = "US",
+#                         category = "XXX", # Sample Category
+#                         time = "today+5-y")
+# 
+# #need one observation per week
+# branda_time <- trend_branda$interest_over_time %>%
+#   spread(key = keyword, value = hits) %>%
+#   rename(Brand A = branda, `Brand A` = `brandb`)
+# 
+# branda_time <- branda_time %>%
+#   ungroup() %>%
+#   mutate(month = lubridate::month(date),
+#          year = lubridate::year(date),
+#          event_time = case_when(
+#            month %in% c(4,5) & year %in% c(2019, 2021, 2022, 2023) ~ "event x",
+#            month %in% c(8,9) & year == 2020 ~ "event x",
+#            month == 12 ~ "holiday",
+#            TRUE ~ "normal")
+#           )
+#          
+# # back to long data for ggplot
+# df_plt <- branda_time %>%
+#   mutate(highlight = case_when(
+#     event_time == "event x" ~ 1,
+#     TRUE ~ 0)
+#   ) %>%
+#   gather(key = "Brand", value = "hits", Brand A, Brand B)
+# 
+# # get_gtrends_data <- function(keyword, geo, category, time) {
+# #   handle_429({
+# #     trend_branda <- gtrends(keyword = c("branda", "brandb", "brandc", "brandd"),
+# #                         geo = "US",
+# #                         category = "XXX", # Sample Category 
+# #                         time = "today+5-y")
+# #     return(trend_branda)
+# #   })
+# # }
+# # 
+# # #need one observation per week right now
+# # #branda_time <- trend_branda$interest_over_time %>%
+# # #  spread(key = keyword, value = hits) %>%
+# # #  rename(Brand A = branda, Brand B = brandb, Brand C = brandc, Brand D = brandd)
+# # 
+# # branda_time <- trend_branda$interest_over_time %>%
+# #   pivot_longer(cols = c("branda", "brandb", "brandc", "brandd"),
+# #                names_to = "Brand", values_to = "hits") %>%
+# #   rename(`Brand A` = branda, `Brand B` = brandb, `Brand C` = brandc, `Brand D` = brandd) # correct column name
+# 
+# # branda_time <- branda_time %>%
+# #   ungroup() %>%
+# #   mutate(month = lubridate::month(date),
+# #          year = lubridate::year(date),
+# #          event_time = case_when(
+# #            month %in% c(4, 5) & year %in% c(2019, 2021, 2022, 2023) ~ "event x",
+# #            month %in% c(8, 9) & year == 2020 ~ "event x",
+# #            month == 12 ~ "holiday",
+# #            TRUE ~ "normal")
+# #          )
+# # 
+# # # now back to long data for ggplot
+# # df_plt <- branda_time %>%
+# #   mutate(highlight = case_when(
+# #     event_time == "event x" ~ 1,
+# #     TRUE ~ 0)
+# #   ) %>%
+# #   gather(key = "Brand", value = "hits", `Brand A`, `Brand B`, `Brand C`, `Brand D`)
+# 
+# plt <-
+#   ggplot(data = df_plt, aes(x = date, y = hits, colour = Brand)) +
+#   geom_rect(
+#     data = rects5,
+#     inherit.aes = FALSE,
+#     aes(
+#       xmin = start,
+#       xmax = end,
+#       ymin = min(df_plt$hits),
+#       ymax = max(df_plt$hits),
+#       group = group
+#     ),
+#     color = "transparent",
+#     fill = "slategray2",
+#     alpha = 0.3
+#   ) +
+#   geom_point() +
+#   geom_line() +
+#   labs(
+#     title = "Brand A v Competitors Search Volume",
+#     x = "Week",
+#     y = "Search Volume (Indexed to 100)",
+#     caption = "April and May are shaded to highlight the impact of Event X"
+#   ) +
+#   theme_event()
+# 
+# # tiff("branda_competitors_search.tiff", res = 220, units = "in",
+# #      width = 10, height = 4)
+# plt
+# #dev.off()
+```
+
+# Update this section based on sample data. 
+
+### Brand B, Brand C, & Brand D
+
+We use \$20-\$40 product as our control group, but below we provide the same chart with major competitors instead of the entire category for Nielsen. This is to check that it was not an effect shared by large name brands that just did not show up in the category. We find that the Event X impact is unique to Brand A.
+
+```{r}
+nielsen_plt_brands
+```
+
+```{r}
+nabca_plt_brands
+```
+```{r}
+# Plotting ACV, Display ACV, Feature ACV, and Feature Display ACV for Nielsen data
+nielsen_plot <- ggplot(query_df, aes(x = date)) +
+  geom_line(aes(y = acv, color = "ACV"), size = 1) +
+  geom_line(aes(y = display_acv, color = "Display ACV"), size = 1) +
+  geom_line(aes(y = feature_acv, color = "Feature ACV"), size = 1) +
+  geom_line(aes(y = feature_display_acv, color = "Feature Display ACV"), size = 1) +
+  labs(title = "ACV, Display ACV, Feature ACV, and Feature Display ACV - Nielsen Data",
+       x = "Date",
+       y = "ACV Values") +
+  scale_color_manual(name = "ACV Type",
+                     values = c("ACV" = "blue",
+                                "Display ACV" = "green",
+                                "Feature ACV" = "red",
+                                "Feature Display ACV" = "purple")) +
+  theme_minimal()
+
+# Plotting ACV for NABCA data
+nabca_plot <- ggplot(nabca_query_df, aes(x = date, y = acv)) +
+  geom_line(color = "blue", size = 1) +
+  labs(title = "ACV - NABCA Data",
+       x = "Date",
+       y = "ACV Values") +
+  theme_minimal()
+
+# Displaying the plots
+nielsen_plot
+nabca_plot
