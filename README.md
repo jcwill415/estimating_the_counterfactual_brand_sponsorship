@@ -18,7 +18,7 @@ The estimates provided are the size of sales increase around Event X, in which w
 
 # Method
 ## Estimating The Counterfactual
-* First, we will isolate Event X incremental volume. We know how many cases of Brand A were sold during Event X for the last three years (using takeaway data from Nielsen and NABCA). The main goal of the analysis is to produce a quality estimate of how many cases we would have sold if we had not sponsored Event X. The difference between how many cases we actually sold and how many cases we would have sold if we had not sponsored Event X is the best way to quantify the impact of Event X on short-term sales.
+* First, we will isolate Event X incremental volume. We know how many cases of Brand A were sold during Event X for the last three years (using takeaway data). The main goal of the analysis is to produce a quality estimate of how many cases we would have sold if we had not sponsored Event X. The difference between how many cases we actually sold and how many cases we would have sold if we had not sponsored Event X is the best way to quantify the impact of Event X on short-term sales.
 
 * Second, we check that factors such as price and distribution are not impacting the sales during Event X. After this, we calculate an **ROI range** with high- and low-end assumptions. This will be further explained in the section **“Figuring out the ROI.”**
 
