@@ -30,7 +30,7 @@ The estimates provided are the size of sales increase around Event X, in which w
 
 # Method
 ## Estimating The Counterfactual
-First, we will isolate Event X incremental volume. We know how many cases of Brand A were sold during Event X for the last three years (using takeaway data from Nielsen and NABCA). The main goal of the analysis is to produce a quality estimate of how many cases we would have sold if we had not sponsored Event X. The difference between how many cases we actually sold and how many cases we would have sold if we had not sponsored Event X is the best way to quantify the impact of Event X on short-term sales.
+First, we will isolate Event X incremental volume. We know how many cases of Brand A were sold during Event X for the last three years (using takeaway data). The main goal of the analysis is to produce a quality estimate of how many cases we would have sold if we had not sponsored Event X. The difference between how many cases we actually sold and how many cases we would have sold if we had not sponsored Event X is the best way to quantify the impact of Event X on short-term sales.
 
 Second, we check that factors such as price and distribution are not impacting the sales during Event X. After this, we calculate an **ROI range** with high- and low-end assumptions. This will be further explained in the section **“Figuring out the ROI.”**
 
@@ -39,7 +39,7 @@ Finally, in addition to volume and financial data, we also explore **Google Tren
 ## Brand A Compared to other Brands in the Same Category
 We start by visualizing the sales trends of Brand A compared to the rest of the Category. To cleanly compare and graph these trends, we use an index. This takes the average weekly case volume during times when sales aren’t influenced by Event X (by excluding April and May) or the holiday season (October through December) as the base for the index.
 
-Looking at Nielsen data over the past 3 years, we show that the Brand A family of brands experienced a substantial increase in sales during Event X each year. The 2020 Event X had the smallest volume increase, as expected due to it being postponed due to COVID and having a smaller audience that year.
+Looking at takeaway data over the past 3 years, we show that the Brand A family of brands experienced a substantial increase in sales during Event X each year. The 2020 Event X had the smallest volume increase, as expected due to it being postponed due to COVID and having a smaller audience that year.
 
 ```{r set up}
 library(tidyverse)
@@ -108,7 +108,7 @@ query_df <- data.frame(
   state = rep("US", length(dates)*10)
 )
 
-# Generate dummy data for nabca_query_df
+# Generate dummy data for data2_query_df
 # For simplicity, we use a subset of the data from query_df
 nabca_query_df <- query_df %>%
   sample_n(100) %>%
@@ -126,12 +126,12 @@ nabca_query_df <- query_df %>%
 
 ```{r save local copies for speed, eval = T}
 write_csv(query_df, "query_df.csv")
-write_csv(nabca_query_df, "nabca_query_df.csv")
+write_csv(data2_query_df, "data2_query_df.csv")
 ```
 
 ```{r load local copies, eval = T}
 query_df <- read_csv("query_df.csv")
-nabca_query_df <- read_csv("nabca_query_df.csv")
+data2_query_df <- read_csv("data2_query_df.csv")
 ```
 
 ```{r}
@@ -267,11 +267,11 @@ plot_the_data <- function(df, rects, title_text) {
     theme_event()
 }
 
-# Wrangling Nielsen data
-nielsen_df <- wrangle_the_data(query_df)
-nielsen_df_brand <- wrangle_the_data(query_df, brands = TRUE)
-nabca_df <- wrangle_the_data(nabca_query_df)
-nabca_df_brand <- wrangle_the_data(nabca_query_df, brands = TRUE)
+# Wrangling data
+data1_df <- wrangle_the_data(query_df)
+data1_df_brand <- wrangle_the_data(query_df, brands = TRUE)
+data2_df <- wrangle_the_data(data2_query_df)
+data2_df_brand <- wrangle_the_data(data2_query_df, brands = TRUE)
 
 # Rectangles for the past 3 years of Event X
 rects3 <- tibble(
@@ -292,30 +292,30 @@ rects5 <- tibble(
          end = as.Date(end))
 
 
-nielsen_plt <- plot_the_data(nielsen_df, rects3, title_text = "Relative Volume of Brand A (Nielsen)")
-nielsen_plt_brands <- plot_the_data(nielsen_df_brand, rects3, title_text = "Relative Volume of Brand A (Nielsen)")
-nabca_plt <- plot_the_data(nabca_df, rects5, title_text = "Relative Volume of Brand A (NABCA)")
-nabca_plt_brands <- plot_the_data(nabca_df_brand, rects5, title_text = "Relative Volume of Brand A (NABCA)")
+data1_plt <- plot_the_data(data1_df, rects3, title_text = "Relative Volume of Brand A (Data 1)")
+data1_plt_brands <- plot_the_data(data1_df_brand, rects3, title_text = "Relative Volume of Brand A (Data 1)")
+data2_plt <- plot_the_data(data2_df, rects5, title_text = "Relative Volume of Brand A (Data 2)")
+data2_plt_brands <- plot_the_data(data2_df_brand, rects5, title_text = "Relative Volume of Brand A (Data 2)")
 
 
 # tiff("branda_volume.tiff", res = 800, units = "in",
 #     width = 10, height = 4)
-# nielsen_plt
+# data1_plt
 #  dev.off()
 #  
-# tiff("branda_nabca_volume.tiff", res = 800, units = "in",
+# tiff("branda_data2_volume.tiff", res = 800, units = "in",
 #     width = 10, height = 4)
-# nabca_plt
+# data2_plt
 #  dev.off()
 #  
-nielsen_plt
+data1_plt
 ```
 
 ## Update this section based on dummy data generated.
-Ex: "The results from NABCA suggest we also saw an increase in Brand A sales in the NABCA market."
+Ex: "The results from Data 2 suggest we also saw an increase in Brand A sales in the US market."
 
 ```{r}
-nabca_plt
+data2_plt
 ```
 
 ```{r branda plot, eval = FALSE}
@@ -335,9 +335,9 @@ plt
 # Update this section based on results of dummy data generated. For example:
 "The index makes it easier to see that Brand A follows the same pattern as other 20\$+ Products in the category, with one exception - during Event X.
 
-Since competitor brands for this category follow the same trend and the Event X period does not feature heavy price discounting or advertising category-wide, it is reasonable to assume that in the absence of Event X actiivity, Brand A would have performed approximately as well as the category did. We also checked to make sure that Brand A did not have any unusual pricing or distribution activity during this time period that would explain its higher sales volume.
+Since competitor brands for this category follow the same trend and the Event X period does not feature heavy price discounting or advertising category-wide, it is reasonable to assume that in the absence of Event X activity, Brand A would have performed approximately as well as category did. We also checked to make sure that Brand A did not have any unusual pricing or distribution activity during this time period that would explain its higher sales volume.
 
-While Brand A follows the category very closely, it is experiencing slighly quicker growth year over year. To avoid any influence from the difference in year over year trend growth between Brand A and the Category, the index is specific to each year.
+While Brand A follows the category very closely, it is experiencing slightly quicker growth year over year. To avoid any influence from the difference in year over year trend growth between Brand A and the Category, the index is specific to each year.
 
 We can quantify the size of the Event X sales increase by estimating how much Brand A would have sold without the Event X sponsorship. A reasonable estimate is that it would have sold as many cases as it did during an average week - the same relative level of performance as the category.
 
@@ -345,7 +345,7 @@ The Event X sales boost is also visible for more than the week of Event X. We in
 
 Based on comparing Brand A to the indexed value of competitors, we can determine a base volume - what we think Brand A would have sold if it had not sponsored Event X. The incremental volume is the difference between Brand A’s actual sales and our estimate of base volume. The lift is the incremental volume expressed as a percentage of the base volume, which makes it easier to compare across years and markets when the base volume differs.
 
-For both Nielsen and NABCA, year XXXX had the highest lift of any year. Across all 3 years we see that Nielsen has a larger increase in from Event X.
+For both data sources, year XXXX had the highest lift of any year. Across all 3 years we see that Nielsen has a larger increase in from Event X.
 
 
 ## Results Table
@@ -391,26 +391,26 @@ calc_incremental <- function(df) {
   
 }
 
-## Calculate Nielsen
-niel_df_vol <- wrangle_the_data(query_df) %>%
+## Calculate Data 1
+data1_df_vol <- wrangle_the_data(query_df) %>%
   rename(brand_family = `Brand Family`)
 
-nielsen_inc <- calc_incremental(niel_df_vol)
+data1_inc <- calc_incremental(data1_df_vol)
 
-## Calculate NABCA
-nabca_df_vol <- wrangle_the_data(nabca_query_df) %>%
+## Calculate Data 2
+data2_df_vol <- wrangle_the_data(data2_query_df) %>%
   rename(brand_family = `Brand Family`)
 
-nabca_inc <- calc_incremental(nabca_df_vol)
+data2_inc <- calc_incremental(data2_df_vol)
 
 ## Format into nice gt tables
-nielsen_inc <- nielsen_inc %>%
-  mutate(Data = "Nielsen") 
+data1_inc <- data1_inc %>%
+  mutate(Data = "Data 1") 
   
-nabca_inc <- nabca_inc %>%
-  mutate(Data = "NABCA") 
+data2_inc <- data2_inc %>%
+  mutate(Data = "Data 2") 
   
-tbl_out <- bind_rows(nielsen_inc, nabca_inc) %>%
+tbl_out <- bind_rows(data1_inc, data2_inc) %>%
   select(-Event) %>%
   group_by(Data) %>%
   gt() %>%
@@ -439,10 +439,10 @@ tbl_out
 # Update this section based on results of dummy data generated. For example:
 ## Figuring out an ROI range
 
-Using these results, plus some financial data and a few assumptions, we can get to an **ROI range** for each of the past 3 years for Event X. We have lift in Nielsen and NABCA markets, which cover about 50% of total U.S. volume. To get lift in the other markets, we have to make some assumptions:
+Using these results, plus some financial data and a few assumptions, we can get to an **ROI range** for each of the past 3 years for Event X. We have lift in US markets, which the data covers about 50% of total U.S. volume. To get lift in the other markets, we have to make some assumptions:
 
-* Our **high-end assumption** is that the markets without coverage experienced the same percent lift as **Nielsen**.
-* Our **low-end assumption** is that the markets without coverage experienced the same percent lift as **NABCA**.
+* Our **high-end assumption** is that the markets without coverage experienced the same percent lift as **Data 1**.
+* Our **low-end assumption** is that the markets without coverage experienced the same percent lift as **Data 2**.
 
 That gives us a **total case volume**. Combined with **gross profit per case** we get to **incremental profit**, and then divide by the **cost of the investment** to get an ROI range.
 
@@ -452,12 +452,12 @@ Overall, the lift or increase in sales we are seeing is not attributable to othe
 
 ```{r}
 pull_values <- function(year_to_pull, data_to_pull) {
-  if(data_to_pull == "Nielsen"){
-    df <- nielsen_inc
+  if(data_to_pull == "Data 1"){
+    df <- data1_inc
   }
   
-  if(data_to_pull == "Nabca") {
-    df <- nabca_inc
+  if(data_to_pull == "Data 2") {
+    df <- data2_inc
   }
   
   df <- df %>%
@@ -472,21 +472,21 @@ pull_values <- function(year_to_pull, data_to_pull) {
 }
 
 
-niel_23 <- pull_values(2023, "Nielsen")
-nabca_23 <- pull_values(2023, "Nabca")
+data1_23 <- pull_values(2023, "Data 1")
+data2_23 <- pull_values(2023, "Data ")
 
-niel_22 <- pull_values(2022, "Nielsen")
-nabca_22 <- pull_values(2022, "Nabca")
+data1_22 <- pull_values(2022, "Data 1")
+data2_22 <- pull_values(2022, "Data 2")
 
-niel_21 <- pull_values(2021, "Nielsen")
-nabca_21 <- pull_values(2021, "Nabca")
+data1_21 <- pull_values(2021, "Data 1")
+data2_21 <- pull_values(2021, "Data 2")
 
 
-calc_roi <- function(niel_base, nabca_base, lift_per, niel_lift_cases, nabca_lift_cases,
+calc_roi <- function(data1_base, data2_base, lift_per, data1_lift_cases, data2_lift_cases,
                      gp_per_case, expense) {
-  uncovered_base <- ((niel_base + nabca_base) * 100 / 50) - (niel_base + nabca_base) #uncovered base cases from nonNielsen_nabca
+  uncovered_base <- ((data1_base + data2_base) * 100 / 50) - (data1_base + data2_base) #uncovered base cases from unobserved market
   uncovered_lift_cases <- uncovered_base * lift_per #based on how we assume lift for uncovered, will try multiple scenarios, high and low
-  total_lift_cases <- niel_lift_cases + nabca_lift_cases + uncovered_lift_cases 
+  total_lift_cases <- data1_lift_cases + data2_lift_cases + uncovered_lift_cases 
   
   lift_dollars <- total_lift_cases * gp_per_case
   roi_out <- lift_dollars/expense
@@ -497,41 +497,41 @@ calc_roi <- function(niel_base, nabca_base, lift_per, niel_lift_cases, nabca_lif
 
 # 2023
 results_2023_h <- calc_roi(
-  niel_base = niel_23$base,
-  nabca_base = nabca_23$base,
-  lift_per = niel_23$lift_per,
-  niel_lift_cases = niel_23$lift_cases,
-  nabca_lift_cases = nabca_23$lift_cases,
+  data1_base = data1_23$base,
+  data2_base = data2_23$base,
+  lift_per = data1_23$lift_per,
+  data1_lift_cases = data1_23$lift_cases,
+  data2_lift_cases = data2_23$lift_cases,
   gp_per_case = 150.50, 
   expense = 5500000
 )
 
-# In the low scenario we use NABCA lift applied to the rest of the market
+# In the low scenario we use Data 2 lift applied to the rest of the market
 results_2023_l <- calc_roi(
-  niel_base = niel_23$base,
-  nabca_base = nabca_23$base,
-  lift_per = nabca_23$lift_per,
-  niel_lift_cases = niel_23$lift_cases,
-  nabca_lift_cases = nabca_23$lift_cases,
+  data1_base = data1_23$base,
+  data2_base = data2_23$base,
+  lift_per = data2_23$lift_per,
+  data1_lift_cases = data1_23$lift_cases,
+  data2_lift_cases = data2_23$lift_cases,
   gp_per_case = 150.50, 
   expense = 5500000
 )
 
 # 2022
 results_2022_h <- calc_roi(
-  niel_base = niel_22$base,
-  nabca_base = nabca_22$base,
-  lift_per = niel_22$lift_per,
-  niel_lift_cases = niel_22$lift_cases,
-  nabca_lift_cases = nabca_22$lift_cases,
+  data1_base = data1_22$base,
+  data2_base = data2_22$base,
+  lift_per = data1_22$lift_per,
+  data1_lift_cases = data1_22$lift_cases,
+  data2_lift_cases = data2_22$lift_cases,
   gp_per_case = 145.25,
   expense = 4750000
 )
 
 # In the low scenario we use NABCA lift applied to the rest of the market
 results_2022_l <- calc_roi(
-  niel_base = niel_22$base,
-  nabca_base = nabca_22$base,
+  data1_base = data1_22$base,
+  data_base = nabca_22$base,
   lift_per = nabca_22$lift_per,
   niel_lift_cases = niel_22$lift_cases,
   nabca_lift_cases = nabca_22$lift_cases,
